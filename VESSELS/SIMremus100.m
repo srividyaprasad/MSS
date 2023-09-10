@@ -13,12 +13,14 @@
 %             2022-05-06 retuning for new version of remus100.m
 %             2022-05-08 added compability for unit quaternions
 
+% Added Runge-Kutta Integration for Euler angles
+
 clearvars;
 
 %% USER INPUTS
 h  = 0.05;               % sample time (s)
 N  = 10000;              % number of samples
-param = 1;               % 0 = Euler angles, 1 = unit quaternions
+param = 0;               % 0 = Euler angles, 1 = unit quaternions
 
 % initial state vector
 phi = 0; theta = 0; psi = 0;
@@ -150,6 +152,87 @@ for i = 1:N+1
    psi_int = psi_int + h * ssa( psi - psi_d );   
    
 end
+
+% simdata = zeros(N+1, length(x)+7); % allocate empty table for simulation data
+% 
+% for i = 1:N+1
+%     t = (i-1) * h; % time
+%     
+%     % measurements
+%     q = x(5); % pitch rate
+%     r = x(6); % yaw rate
+%     z = x(9); % z-position (depth)
+%     
+%     if (param == 0)
+%         phi = x(10); theta = x(11); psi = x(12); % Euler angles
+%     else
+%         [phi, theta, psi] = q2euler(x(10:13)); % quaternion to Euler angles
+%     end
+%     
+%     % depth controller (successive-loop closure)
+%     if (z_step > 100 || z_step < 0)
+%         error('desired depth must be between 0-100 m')
+%     end
+%     
+%     if t > 200
+%         z_ref = z_step;
+%     else
+%         z_ref = 0;
+%     end
+%     z_d = exp(-h * wn_d_z) * z_d + (1 - exp(-h * wn_d_z)) * z_ref; % LP filter
+%     
+%     theta_d = Kp_z * ((z - z_d) + (1 / T_z) * z_int); % PI
+%     delta_s = -Kp_theta * ssa(theta - theta_d) - Kd_theta * q...
+%         - Ki_theta * theta_int; % PID
+%     
+%     % PID heading controller
+%     if t > 100
+%         psi_ref = psi_step;
+%     else
+%         psi_ref = 0;
+%     end
+%     
+%     % LP filter
+%     psi_d = exp(-h * wn_d_psi) * psi_d + (1 - exp(-h * wn_d_psi)) * psi_ref;
+%     
+%     delta_r = -Kp_psi * ssa(psi - psi_d) - Kd_psi * r - Ki_psi * psi_int; % PID
+%     
+%     % propeller revolution (rpm)
+%     if (n < n_d)
+%         n = n + 1;
+%     end
+%     
+%     % control inputs
+%     max_ui = [30 * pi / 180, 30 * pi / 180, 1525]'; % rad, rad, rpm
+%     if (abs(delta_r) > max_ui(1)), delta_r = sign(delta_r) * max_ui(1); end
+%     if (abs(delta_s) > max_ui(2)), delta_s = sign(delta_s) * max_ui(2); end
+%     if (abs(n) > max_ui(3)), n = sign(n) * max_ui(3); end
+%     
+%     ui = [delta_r, delta_s, n]';
+%     
+%     % store simulation data in a table
+%     simdata(i, :) = [t, z_d, theta_d, psi_d, ui', x'];
+%     
+%     % Runge-Kutta 4 integration method (k+1)
+%     k1 = h * remus100(x, ui, Vc, betaVc);
+%     k2 = h * remus100(x + k1 / 2, ui, Vc, betaVc);
+%     k3 = h * remus100(x + k2 / 2, ui, Vc, betaVc);
+%     k4 = h * remus100(x + k3, ui, Vc, betaVc);
+%     
+%     if (param == 0)
+%         x = x + (k1 + 2 * k2 + 2 * k3 + k4) / 6; % Runge-Kutta 4 integration
+%     else
+%         x(1:9) = x(1:9) + (k1(1:9) + 2 * k2(1:9) + 2 * k3(1:9) + k4(1:9)) / 6; % Runge-Kutta 4 integration
+%         quat = x(10:13); % unit quaternion
+%         quat = expm(Tquat(x(4:6)) * h) * quat; % exact discretization
+%         x(10:13) = quat / norm(quat); % normalization
+%     end
+%     
+%     % Runge-Kutta 4 integration method (k+1)
+%     z_int = z_int + h * (z - z_d);
+%     theta_int = theta_int + h * ssa(theta - theta_d);
+%     psi_int = psi_int + h * ssa(psi - psi_d);
+% end
 
 %% PLOTS
 t       = simdata(:,1);         % simdata = [t z_d theta_d psi_d ui' x']
