@@ -9,7 +9,7 @@ The lecture notes https://wiley.fossen.biz serve as documentation for the toolbo
     T. I. Fossen and T. Perez (2004). Marine Systems Simulator (MSS)
     URL: https://github.com/cybergalactic/MSS
 
-Copy the directory MSS/contents to your computer and "add the path with subfolders" to Matlab. Then type:
+Git clone the MSS repo to your computer and run addfolderstopath.m to add Matlab to the whole MSS folder path. Then type:
 
     help MSS
 
