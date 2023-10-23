@@ -291,7 +291,9 @@ b = D_auv/2;
 r44 = 0.3;               % added moment of inertia in roll: A44 = r44 * Ix
 r_bg = [ 0 0 0.02 ]';    % CG w.r.t. to the CO
 r_bb = [ 0 0 0 ]';       % CB w.r.t. to the CO
-
+xg = r_bg(1);
+yg = r_bg(2);
+zg = r_bg(3);
 % Parasitic drag coefficient CD_0, i.e. zero lift and alpha = 0
 % F_drag = 0.5 * rho * Cd * (pi * b^2)   
 % F_drag = 0.5 * rho * CD_0 * S
@@ -338,45 +340,89 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Mass Matrix
+% M = zeros(6,6);
+% M(1,1) = m - Xudot;
+% M(1,5) = m*zg;
+% M(1,6) = 0;
+% %
+% M(2,2) = m - Yvdot;
+% M(2,4) = -m*zg;
+% M(2,6) = - Yrdot;
+% %
+% M(3,3) = m - Zwdot;
+% M(3,4) = 0;
+% M(3,5) = - Zqdot;
+% %
+% M(4,2) = -m*zg;
+% M(4,3) = 0;
+% M(4,4) = Ixx - Kpdot;
+% %
+% M(5,1) = m*zg;
+% M(5,3) = - Mwdot;
+% M(5,5) = Iyy - Mqdot;
+% %
+% M(6,1) = 0;
+% M(6,2) = - Nvdot;
+% M(6,6) = Izz - Nrdot;
+% %
+% Minv = inv(M);
+
+% from textbook 
 M = zeros(6,6);
 M(1,1) = m - Xudot;
-M(1,5) = m*zg;
-M(1,6) = 0;
+M(1,5) = m*zg - zg*Xudot;
+M(1,6) = yg*Xudot - m*yg;
 %
 M(2,2) = m - Yvdot;
-M(2,4) = -m*zg;
-M(2,6) = - Yrdot;
+M(2,4) = zg*Yvdot - m*zg;
+M(2,6) = m*xg - xg*Yrdot;
 %
 M(3,3) = m - Zwdot;
-M(3,4) = 0;
-M(3,5) = - Zqdot;
+M(3,4) = m*yg - yg*Zwdot;
+M(3,5) = xg*Zwdot - m*xg;
 %
-M(4,2) = -m*zg;
-M(4,3) = 0;
-M(4,4) = Ixx - Kpdot;
+M(4,2) = zg*Yvdot - m*zg;
+M(4,3) = m*yg - yg*Zwdot;
+M(4,4) = Ixx - zg^2 * Yvdot - yg^2 * Zwdot - Kpdot;
 %
-M(5,1) = m*zg;
-M(5,3) = - Mwdot;
-M(5,5) = Iyy - Mqdot;
+M(5,1) = m*zg - zg*Xudot;
+M(5,3) = xg*Zwdot - m*xg;
+M(5,5) = Iyy - zg^2 * Xudot - xg^2 * Zwdot - Mqdot;
 %
-M(6,1) = 0;
-M(6,2) = - Nvdot;
-M(6,6) = Izz - Nrdot;
+M(6,1) = yg*Xudot - m*yg;
+M(6,2) = m*xg - xg*Yvdot;
+M(6,6) = Izz - yg^2 * Xudot - xg^2 * Yvdot - Nrdot;
 %
 Minv = inv(M);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Msym = 0.5 * (M + M');      % symmetrization of the inertia matrix
+M11 = Msym(1:3,1:3);
+M12 = Msym(1:3,4:6);
+M21 = M12';
+M22 = Msym(4:6,4:6);
+nu1 = nu(1:3);
+nu2 = nu(4:6);
+dt_dnu1 = M11*nu1 + M12*nu2;
+dt_dnu2 = M21*nu1 + M22*nu2;
+C = [  zeros(3,3)      -Smtrx(dt_dnu1)
+    -Smtrx(dt_dnu1)  -Smtrx(dt_dnu2) ];
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Dissipative forces and moments
+
+% T3 = T2;       % for AUVs, assume same time constant in sway and heave
+% w4 = sqrt( W * (r_bg(3)-r_bb(3)) / M(4,4) );
+% w5 = sqrt( W * (r_bg(3)-r_bb(3)) / M(5,5) );
+
+% D = diag( [M(1,1)/T1 M(2,2)/T2 M(3,3)/T3...
+%     M(4,4)*2*zeta4*w4  M(5,5)*2*zeta5*w5 M(6,6)/T6 ] ); 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-C = m2c(M,nu);
+D = -diag([Xuu*abs(u), Yvv*abs(v), Zww*abs(w), Kpp*abs(p), Mqq*abs(q), Nrr*abs(r)]);
 
-
-% Dissipative forces and moments
-D = Dmtrx([T1 T2 T6],[zeta4 zeta5],M,[W r_bg' r_bb']);
-
-% 6x6 diagonal linear damping matrix
-D(1,1) = D(1,1) * exp(-3*U);   % vanish at high speed where quadratic
-D(2,2) = D(2,2) * exp(-3*U);   % drag and lift forces dominates
-D(6,6) = D(6,6) * exp(-3*U);
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 tau_liftdrag = forceLiftDrag(D_auv,S,CD_0,alpha,U); % g0
 tau_crossflow = crossFlowDrag(L_auv,D_auv,D_auv,nu); % w
@@ -392,20 +438,19 @@ end
 % for a submerged body using the rotation matrix R as input
 % g = gRvect(W,B,R,r_bg,r_bb); % g(eta)
 
-% pitch and roll angles 
-% theta = deg2rad(10);
-% phi = deg2rad(30); 
-% % g-vector 
-% g = gvect(W,B,theta,phi,r_bg,r_bb); 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-g = gRvect(W,B,R,r_bg,r_bb);
-g = [...
-   -(W-B) * R(3,1)
-   -(W-B) * R(3,2)
-   -(W-B) * R(3,3)
-   -(r_bg(2)*W - r_bb(2)*B) * R(3,3) + (r_bg(3)*W - r_bb(3)*B) * R(3,2)
-   -(r_bg(3)*W - r_bb(3)*B) * R(3,1) + (r_bg(1)*W - r_bb(1)*B) * R(3,3)
-   -(r_bg(1)*W - r_bb(1)*B) * R(3,2) + (r_bg(2)*W - r_bb(2)*B) * R(3,1) ];
+% pitch and roll angles 
+sth  = sin(theta); cth  = cos(theta);
+sphi = sin(phi);   cphi = cos(phi);
+g = [(W-B) * sth
+  -(W-B) * cth * sphi
+  -(W-B) * cth * cphi
+  -(r_bg(2)*W-r_bb(2)*B) * cth * cphi + (r_bg(3)*W-r_bb(3)*B) * cth * sphi
+   (r_bg(3)*W-r_bb(3)*B) * sth        + (r_bg(1)*W-r_bb(1)*B) * cth * cphi
+  -(r_bg(1)*W-r_bb(1)*B) * cth * sphi - (r_bg(2)*W-r_bb(2)*B) * sth       ];
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Horizontal- and vertical-plane relative speed
 U_rh = sqrt( nu(1)^2 + nu(2)^2 );  %u, v 
@@ -429,6 +474,8 @@ tau(3) = Z_s; % Z
 tau(4) = K_prop; % K
 tau(5) = x_s * Z_s; % L = stern-plane z-position * stern-plane heave force
 tau(6) = x_r * Y_r; % M = rudder x-position * rudder sway force 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % State-space model
 xdot = [ M \ (tau + tau_liftdrag + tau_crossflow - C * nu - D * nu  - g)
