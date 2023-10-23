@@ -1,4 +1,4 @@
-% SIMremus100_rk4.m Vehicle Simulator
+% SIMremus100_original_rk4.m Vehicle Simulator
 clear;
 clc;
 close all;
@@ -30,9 +30,11 @@ time_string = datestr(datenum(yy,mo,dd,hh,mm,ss) ,13) ;
 % load initial_state % data from INITIAL_CONDITIONS.M on above
 
 ui = zeros(3,1000);
-ui(3,:) = 3;
+ui(1,:) = deg2rad(-0.11); % delta_r
+ui(2,:) = deg2rad(-2.15); % delta_s
+ui(3,:) = 1418; % RPM
 time_step = 0.01;
-x = zeros(12,1);
+x = [2.0575 0.001 -0.021 0 0 0 0 0 0 deg2rad(-2.42) deg2rad(-0.583) 0]'; % Add trim state
 XX = [];
 
 pitch_max = 90 ;
@@ -40,12 +42,12 @@ pitch_max = 90 ;
 %RUN MODEL
 % ------------------------------------------------------------------------------
 % Initialize number of steps and storage matrix
-n_steps = size(ui, 2)-1;
-
+n_steps = 2;
+% size(ui, 2)-1;
 %output_table = zeros(n_steps, size(x,1) + size(ui,1)+7);
 fprintf('\nSimulator running...\n');
 
-%MAIN PROGRAM
+% MAIN PROGRAM
 for i = 1:n_steps
     
     XX = [XX x];
@@ -58,17 +60,18 @@ for i = 1:n_steps
     end
 
     % Calculate forces, accelerations
-    [xdot , forces] = remus100(x,ui(:,i)');    
-    
+    [xdot, U, Forces, Moments] = remus100_withM(x,ui(:,i)');    
+
     %% RUNGE-KUTTA APPROXIMATION to calculate new states
     %% NOTE: ideally, should be approximating ui values for k2,k3
     %% ie (ui(: ,i)+ui(: ,i+1))/2
     k1_vec = xdot;
-    k2_vec = remus100(x+( 0.5 .* time_step.*k1_vec),((ui(:,i)+ui(:,i+1))./2)');
-    k3_vec = remus100(x+( 0.5 .*time_step.*k2_vec),((ui(:,i)+ui(:,i+1))./2)');
-    k4_vec = remus100(x+(time_step.*k3_vec) , ui(: ,i+1)') ;
+    k2_vec = remus100_withM(x+( 0.5 .* time_step.*k1_vec),((ui(:,i)+ui(:,i+1))./2)');
+    k3_vec = remus100_withM(x+( 0.5 .*time_step.*k2_vec),((ui(:,i)+ui(:,i+1))./2)');
+    k4_vec = remus100_withM(x+(time_step.*k3_vec) , ui(: ,i+1)') ;
     x = x + time_step/6.*(k1_vec+2.*k2_vec+2.*k3_vec+k4_vec) ;
 end
+
 
 %Plot Output
 for i = 1:size(x,1)
