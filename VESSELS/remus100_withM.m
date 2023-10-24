@@ -423,10 +423,62 @@ C = [  zeros(3,3)      -Smtrx(dt_dnu1)
 D = -diag([Xuu*abs(u), Yvv*abs(v), Zww*abs(w), Kpp*abs(p), Mqq*abs(q), Nrr*abs(r)]);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Generate tau_liftdrag = g0
 
-tau_liftdrag = forceLiftDrag(D_auv,S,CD_0,alpha,U); % g0
-tau_crossflow = crossFlowDrag(L_auv,D_auv,D_auv,nu); % w
+e = 0.7;             % Oswald efficiency number
+AR = D_auv^2/S;          % wing aspect ratio
 
+% linear lift
+CL_alpha = pi * AR / ( 1 + sqrt(1 + (AR/2)^2) );
+CL = CL_alpha * alpha;  
+
+% parasitic and induced drag
+CD = CD_0 + CL.^2 / (pi * e * AR); 
+
+% nonlinear lift (blending function)
+CL = (1-0) .* CL + 0 .* 2 .* sign(alpha).*sin(alpha).^2.*cos(alpha);
+
+
+F_drag = 1/2 * rho * U^2 * S * CD;    % drag force
+F_lift = 1/2 * rho * U^2 * S * CL;    % lift force
+
+% transform from FLOW axes to BODY axes using angle of attack
+tau_liftdrag = [...
+    cos(alpha) * (-F_drag) - sin(alpha) * (-F_lift)
+    0
+    sin(alpha) * (-F_drag) + cos(alpha) * (-F_lift)
+    0
+    0
+    0 ];
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Generate tau_crossflow = w
+
+%n = 20;                 % number of strips
+
+dx = L_auv/20;             
+Cd_2D = Hoerner(D_auv,D_auv);   % 2D drag coefficient based on Hoerner's curve
+
+Yh = 0; Zh = 0; Mh = 0; Nh = 0;
+for xL = -L_auv/2:dx:L_auv/2
+    v_r = nu(2);          % relative sway velocity
+    w_r = nu(3);
+    r = nu(6);            % yaw rate
+    U_h = abs(v_r + xL * r) * (v_r + xL * r);
+    U_v = abs(w_r + xL * r) * (v_r + xL * r);    
+    Yh = Yh - 0.5 * rho * D_auv * Cd_2D * U_h * dx;       % sway force
+    Zh = Zh - 0.5 * rho * D_auv * Cd_2D * U_v * dx;       % heave force  
+    Mh = Mh - 0.5 * rho * D_auv * Cd_2D * xL * U_v * dx;  % pitch moment    
+    Nh = Nh - 0.5 * rho * D_auv * Cd_2D * xL * U_h * dx;  % yaw moment
+end
+
+tau_crossflow = [0 Yh Zh 0 Mh Nh]';
+
+end
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Kinematics
 if (length(x) == 13)
     [J,R] = quatern(x(10:13)); % J(eta)
